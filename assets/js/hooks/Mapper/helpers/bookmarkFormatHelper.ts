@@ -360,12 +360,18 @@ export const formatBookmarkName = (
   return result.trim().replace(/\s+/g, ' ');
 };
 
-export const copyToClipboard = async (text: string) => {
-  try {
-    await navigator.clipboard.writeText(text);
-  } catch (err) {
-    console.warn('Failed to copy to clipboard', err);
+export const copyToClipboard = async (text: string): Promise<boolean> => {
+  // Async Clipboard API requires a secure context (https or localhost).
+  // On insecure http we return false so the caller can show the value instead.
+  if (typeof navigator !== 'undefined' && navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (err) {
+      console.warn('Failed to copy to clipboard', err);
+    }
   }
+  return false;
 };
 
 export const handleAutoBookmark = async (
