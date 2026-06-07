@@ -497,3 +497,48 @@ export const handleAutoBookmark = async (
 
   return { updatedSignature, shouldUpdate };
 };
+
+export const getBookmarkNameForSignature = (
+  signature: SystemSignature,
+  settings: any,
+  systemSignatures: Record<string, SystemSignature[]>,
+  currentSystemId: string,
+  currentSolarSystemId: string,
+  wormholesData: Record<string, WormholeDataRaw> = {},
+): string => {
+  const format = settings?.bookmark_name_format;
+  if (!format) {
+    return signature.eve_id;
+  }
+
+  const info = parseSignatureCustomInfo(signature.custom_info);
+  let bookmarkIndexToUse: number | string = info.bookmark_index != null ? info.bookmark_index : '';
+
+  if (info.bookmark_index == null) {
+    const separator = settings?.bookmark_custom_mapping?.chain_separator || '';
+    const calculated = calculateBookmarkIndex(
+      systemSignatures,
+      currentSystemId,
+      currentSolarSystemId,
+      signature.eve_id,
+      settings?.bookmark_wormholes_start_at_zero,
+      separator,
+    );
+    bookmarkIndexToUse = calculated.index;
+  }
+
+  const name = formatBookmarkName(
+    format,
+    signature,
+    null,
+    bookmarkIndexToUse,
+    wormholesData,
+    settings?.bookmark_wormholes_start_at_zero,
+    settings?.bookmark_custom_mapping,
+    systemSignatures,
+    currentSystemId,
+    currentSolarSystemId,
+  ).trim();
+
+  return name || signature.eve_id;
+};
