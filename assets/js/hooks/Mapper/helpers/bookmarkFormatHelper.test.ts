@@ -1,4 +1,4 @@
-import { copyToClipboard, getBookmarkNameForSignature } from './bookmarkFormatHelper';
+import { copyBookmarkName, copyToClipboard, getBookmarkNameForSignature } from './bookmarkFormatHelper';
 import { SignatureGroup, SystemSignature } from '@/hooks/Mapper/types';
 
 describe('copyToClipboard', () => {
@@ -27,7 +27,7 @@ describe('copyToClipboard', () => {
 });
 
 describe('getBookmarkNameForSignature', () => {
-  const sig = { id: '1', eve_id: 'abc-123', group: SignatureGroup.Wormhole } as SystemSignature;
+  const sig = { id: '1', eve_id: 'abc-123', group: SignatureGroup.Wormhole } as unknown as SystemSignature;
   const sigs: Record<string, SystemSignature[]> = {};
 
   it('returns the raw eve_id when no format is set', () => {
@@ -42,5 +42,39 @@ describe('getBookmarkNameForSignature', () => {
   it('falls back to eve_id when the format resolves to empty', () => {
     const settings = { bookmark_name_format: '{dest_type}' };
     expect(getBookmarkNameForSignature(sig, settings, sigs, 'sys-uuid', '30000142')).toBe('abc-123');
+  });
+});
+
+describe('copyBookmarkName', () => {
+  const sig = { id: '1', eve_id: 'abc-123', group: SignatureGroup.Wormhole } as unknown as SystemSignature;
+  const sigs: Record<string, SystemSignature[]> = {};
+
+  afterEach(() => jest.restoreAllMocks());
+
+  it('copies the formatted name and reports success in a secure context', async () => {
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    Object.defineProperty(window, 'isSecureContext', { value: true, configurable: true });
+
+    const result = await copyBookmarkName(
+      sig,
+      { bookmark_name_format: 'WH-{sig_letters}' },
+      sigs,
+      'sys-uuid',
+      '30000142',
+    );
+
+    expect(writeText).toHaveBeenCalledWith('WH-ABC');
+    expect(result).toEqual({ copied: true, name: 'WH-ABC' });
+  });
+
+  it('returns the name with copied=false in an insecure context (caller shows fallback)', async () => {
+    Object.defineProperty(window, 'isSecureContext', { value: false, configurable: true });
+    // @ts-ignore - simulate insecure origin where the clipboard API is absent
+    Object.assign(navigator, { clipboard: undefined });
+
+    const result = await copyBookmarkName(sig, {}, sigs, 'sys-uuid', '30000142');
+
+    expect(result).toEqual({ copied: false, name: 'abc-123' });
   });
 });

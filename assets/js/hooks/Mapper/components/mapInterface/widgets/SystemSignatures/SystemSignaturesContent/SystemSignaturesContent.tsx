@@ -28,6 +28,11 @@ import {
   renderInfoColumn,
   renderUpdatedTimeLeft,
 } from '@/hooks/Mapper/components/mapInterface/widgets/SystemSignatures/renders';
+import { CopyBookmarkFallbackDialog } from '@/hooks/Mapper/components/mapInterface/components/CopyBookmarkFallbackDialog';
+import { copyBookmarkName } from '@/hooks/Mapper/helpers/bookmarkFormatHelper.ts';
+import { useToast } from '@/hooks/Mapper/ToastProvider';
+import { OutCommand } from '@/hooks/Mapper/types/mapHandlers.ts';
+import { UserSettingsRemote } from '@/hooks/Mapper/components/mapRootContent/components/MapSettings/types.ts';
 import { SETTINGS_KEYS, SIGNATURE_WINDOW_ID, SignatureSettingsType } from '@/hooks/Mapper/constants/signatures.ts';
 import { useClipboard, useHotkey } from '@/hooks/Mapper/hooks';
 import useMaxWidth from '@/hooks/Mapper/hooks/useMaxWidth';
@@ -74,7 +79,19 @@ export const SystemSignaturesContent = ({
 
   const {
     storedSettings: { settingsSignatures, settingsSignaturesUpdate },
+    data: { systemSignatures, systems, wormholesData },
+    outCommand,
   } = useMapRootState();
+
+  const { show: showToast } = useToast();
+  const [userSettings, setUserSettings] = useState<UserSettingsRemote | null>(null);
+  const [copyFallbackName, setCopyFallbackName] = useState<string | null>(null);
+
+  useEffect(() => {
+    outCommand<{ user_settings: UserSettingsRemote }>({ type: OutCommand.getUserSettings, data: null })
+      .then(res => setUserSettings(res?.user_settings ?? null))
+      .catch((e: unknown) => console.warn('Failed to fetch user settings', e));
+  }, [outCommand]);
 
   const tableRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<WdTooltipHandlers>(null);
@@ -238,6 +255,46 @@ export const SystemSignaturesContent = ({
     });
   }, []);
 
+  const handleCopyBookmark = useCallback(
+    async (sig: SystemSignature) => {
+      const currentSolarSystemId =
+        systems.find(s => s.id === systemId)?.system_static_info?.solar_system_id?.toString() ?? '';
+
+      const { copied, name } = await copyBookmarkName(
+        sig,
+        userSettings,
+        systemSignatures,
+        systemId,
+        currentSolarSystemId,
+        wormholesData,
+      );
+
+      if (copied) {
+        showToast({ severity: 'success', summary: 'Copied', detail: name, life: 2000 });
+      } else {
+        // Insecure context (http://wanderer.lan): clipboard API unavailable — show
+        // the name in a dialog so the user can select + copy it manually.
+        setCopyFallbackName(name);
+      }
+    },
+    [systems, systemId, userSettings, systemSignatures, wormholesData, showToast],
+  );
+
+  const renderCopyButton = useCallback(
+    (sig: SystemSignature) => (
+      <button
+        type="button"
+        className="pi pi-copy cursor-pointer bg-transparent border-none p-0 text-stone-400 hover:text-stone-100"
+        title="Copy bookmark name"
+        onClick={e => {
+          e.stopPropagation();
+          void handleCopyBookmark(sig);
+        }}
+      />
+    ),
+    [handleCopyBookmark],
+  );
+
   return (
     <div ref={tableRef} className="h-full">
       {filteredSignatures.length === 0 ? (
@@ -351,6 +408,13 @@ export const SystemSignaturesContent = ({
               ></Column>
             )}
 
+            <Column
+              field="copy"
+              header=""
+              body={renderCopyButton}
+              bodyClassName="p-0 px-1"
+              style={{ maxWidth: 26, minWidth: 26, width: 26 }}
+            />
             {!selectable && (
               <Column
                 header=""
@@ -388,6 +452,8 @@ export const SystemSignaturesContent = ({
           signatureData={selectedSignatureForDialog || undefined}
         />
       )}
+
+      <CopyBookmarkFallbackDialog name={copyFallbackName} onHide={() => setCopyFallbackName(null)} />
     </div>
   );
 };

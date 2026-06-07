@@ -10,6 +10,7 @@ import {
 } from '@/hooks/Mapper/components/map/constants';
 import { ALL_DEST_TYPES_MAP, MULTI_DEST_WHS } from '@/hooks/Mapper/constants';
 import { ShipSizeStatus } from '@/hooks/Mapper/types/connection';
+import { UserSettingsRemote } from '@/hooks/Mapper/components/mapRootContent/components/MapSettings/types.ts';
 
 const getTimeStatusString = (status?: TimeStatus, mapping?: Record<string, string>): string => {
   switch (status) {
@@ -541,4 +542,29 @@ export const getBookmarkNameForSignature = (
   ).trim();
 
   return name || signature.eve_id;
+};
+
+export type CopyBookmarkResult = { copied: boolean; name: string };
+
+// Resolves the bookmark name for a signature and attempts to copy it. Returns the
+// resolved name plus whether the clipboard write succeeded; on an insecure context
+// (no Clipboard API) copied is false so the caller can offer a manual-copy fallback.
+export const copyBookmarkName = async (
+  signature: SystemSignature,
+  settings: Partial<UserSettingsRemote> | null,
+  systemSignatures: Record<string, SystemSignature[]>,
+  currentSystemId: string,
+  currentSolarSystemId: string,
+  wormholesData: Record<string, WormholeDataRaw> = {},
+): Promise<CopyBookmarkResult> => {
+  const name = getBookmarkNameForSignature(
+    signature,
+    settings,
+    systemSignatures,
+    currentSystemId,
+    currentSolarSystemId,
+    wormholesData,
+  );
+  const copied = await copyToClipboard(name);
+  return { copied, name };
 };
