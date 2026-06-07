@@ -8,6 +8,7 @@ import {
   WORMHOLES_ADDITIONAL_INFO_BY_SHORT_NAME,
 } from '@/hooks/Mapper/components/map/constants.ts';
 import { SystemSignaturesContent } from '@/hooks/Mapper/components/mapInterface/widgets/SystemSignatures/SystemSignaturesContent';
+import { CopyBookmarkFallbackDialog } from '@/hooks/Mapper/components/mapInterface/components/CopyBookmarkFallbackDialog';
 import { MULTI_DEST_WHS, ALL_DEST_TYPES_MAP, DEST_TYPES_MAP_MAP } from '@/hooks/Mapper/constants.ts';
 import { SETTINGS_KEYS, SignatureSettingsType } from '@/hooks/Mapper/constants/signatures';
 import { getSystemClassGroup } from '@/hooks/Mapper/components/map/helpers/getSystemClassGroup.ts';
@@ -107,7 +108,10 @@ export const SystemLinkSignatureDialog = ({ data, setVisible }: SystemLinkSignat
     settings: LINK_SIGNATURE_SETTINGS,
   });
 
-  const { handleLinkSignature } = useLinkSignature({ data, targetSystemClassGroup });
+  const { handleLinkSignature, copyFallbackName, clearCopyFallback } = useLinkSignature({
+    data,
+    targetSystemClassGroup,
+  });
 
   const handleSelect = useCallback(
     async (signature: SystemSignature) => {
@@ -115,12 +119,21 @@ export const SystemLinkSignatureDialog = ({ data, setVisible }: SystemLinkSignat
         return;
       }
 
-      await handleLinkSignature(signature);
+      // Keep this dialog mounted if a show-name fallback is now visible (insecure
+      // HTTP), so it isn't unmounted before the user can copy the name manually.
+      const fallbackShown = await handleLinkSignature(signature);
 
-      setVisible(false);
+      if (!fallbackShown) {
+        setVisible(false);
+      }
     },
     [handleLinkSignature, setVisible],
   );
+
+  const handleFallbackHide = useCallback(() => {
+    clearCopyFallback();
+    setVisible(false);
+  }, [clearCopyFallback, setVisible]);
 
   useEffect(() => {
     if (!targetSystemDynamicInfo) {
@@ -129,24 +142,28 @@ export const SystemLinkSignatureDialog = ({ data, setVisible }: SystemLinkSignat
   }, [targetSystemDynamicInfo]);
 
   return (
-    <Dialog
-      header="Select signature to link"
-      visible
-      draggable={true}
-      style={{ width: '500px' }}
-      onHide={handleHide}
-      contentClassName="!p-0"
-    >
-      <SystemSignaturesContent
-        systemId={`${data.solar_system_source}`}
-        signatures={signatures}
-        hasUnsupportedLanguage={false}
-        settings={LINK_SIGNATURE_SETTINGS}
-        hideLinkedSignatures
-        selectable
-        onSelect={handleSelect}
-        filterSignature={filterSignature}
-      />
-    </Dialog>
+    <>
+      <Dialog
+        header="Select signature to link"
+        visible={copyFallbackName === null}
+        draggable={true}
+        style={{ width: '500px' }}
+        onHide={handleHide}
+        contentClassName="!p-0"
+      >
+        <SystemSignaturesContent
+          systemId={`${data.solar_system_source}`}
+          signatures={signatures}
+          hasUnsupportedLanguage={false}
+          settings={LINK_SIGNATURE_SETTINGS}
+          hideLinkedSignatures
+          selectable
+          onSelect={handleSelect}
+          filterSignature={filterSignature}
+        />
+      </Dialog>
+
+      <CopyBookmarkFallbackDialog name={copyFallbackName} onHide={handleFallbackHide} />
+    </>
   );
 };

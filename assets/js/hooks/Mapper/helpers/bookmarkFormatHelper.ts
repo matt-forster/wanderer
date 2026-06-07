@@ -385,9 +385,10 @@ export const handleAutoBookmark = async (
   targetSystemClassGroup: string | null,
   targetSystemUuid?: string,
   targetSolarSystemId?: string,
-): Promise<{ updatedSignature: SystemSignature; shouldUpdate: boolean }> => {
+): Promise<{ updatedSignature: SystemSignature; shouldUpdate: boolean; copyResult?: CopyBookmarkResult }> => {
   let updatedSignature = signature;
   let shouldUpdate = false;
+  let copyResult: CopyBookmarkResult | undefined;
 
   if (
     signature.group !== SignatureGroup.Wormhole ||
@@ -492,11 +493,14 @@ export const handleAutoBookmark = async (
       currentSolarSystemId,
     );
 
-    // Run this synchronously to avoid clipboard issues if possible
-    await copyToClipboard(formattedStr);
+    // Run this synchronously to avoid clipboard issues if possible. Capture the
+    // result so callers can surface feedback (toast on success, show-name dialog
+    // on insecure HTTP) instead of the copy failing silently.
+    const copied = await copyToClipboard(formattedStr);
+    copyResult = { copied, name: formattedStr };
   }
 
-  return { updatedSignature, shouldUpdate };
+  return { updatedSignature, shouldUpdate, copyResult };
 };
 
 export const getBookmarkNameForSignature = (

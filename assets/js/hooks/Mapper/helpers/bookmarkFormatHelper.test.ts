@@ -1,4 +1,9 @@
-import { copyBookmarkName, copyToClipboard, getBookmarkNameForSignature } from './bookmarkFormatHelper';
+import {
+  copyBookmarkName,
+  copyToClipboard,
+  getBookmarkNameForSignature,
+  handleAutoBookmark,
+} from './bookmarkFormatHelper';
 import { SignatureGroup, SystemSignature } from '@/hooks/Mapper/types';
 
 describe('copyToClipboard', () => {
@@ -76,5 +81,55 @@ describe('copyBookmarkName', () => {
     const result = await copyBookmarkName(sig, {}, sigs, 'sys-uuid', '30000142');
 
     expect(result).toEqual({ copied: false, name: 'abc-123' });
+  });
+});
+
+describe('handleAutoBookmark copyResult', () => {
+  const whSig = { id: '1', eve_id: 'abc-123', group: SignatureGroup.Wormhole } as unknown as SystemSignature;
+  const sigs: Record<string, SystemSignature[]> = {};
+
+  afterEach(() => jest.restoreAllMocks());
+
+  it('reports the auto-copied name and success in a secure context', async () => {
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    Object.defineProperty(window, 'isSecureContext', { value: true, configurable: true });
+
+    const { copyResult } = await handleAutoBookmark(
+      whSig,
+      { bookmark_name_format: 'WH-{sig_letters}' },
+      sigs,
+      'sys-uuid',
+      '30000142',
+      {},
+      null,
+    );
+
+    expect(writeText).toHaveBeenCalledWith('WH-ABC');
+    expect(copyResult).toEqual({ copied: true, name: 'WH-ABC' });
+  });
+
+  it('reports copied=false on insecure HTTP so the caller can show the name', async () => {
+    Object.defineProperty(window, 'isSecureContext', { value: false, configurable: true });
+    // @ts-ignore - simulate insecure origin where the clipboard API is absent
+    Object.assign(navigator, { clipboard: undefined });
+
+    const { copyResult } = await handleAutoBookmark(
+      whSig,
+      { bookmark_name_format: 'WH-{sig_letters}' },
+      sigs,
+      'sys-uuid',
+      '30000142',
+      {},
+      null,
+    );
+
+    expect(copyResult).toEqual({ copied: false, name: 'WH-ABC' });
+  });
+
+  it('returns no copyResult when auto-copy does not run (no format)', async () => {
+    const { copyResult } = await handleAutoBookmark(whSig, {}, sigs, 'sys-uuid', '30000142', {}, null);
+
+    expect(copyResult).toBeUndefined();
   });
 });
