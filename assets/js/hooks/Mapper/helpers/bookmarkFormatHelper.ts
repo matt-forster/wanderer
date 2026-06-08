@@ -206,32 +206,44 @@ export const formatBookmarkName = (
   const fullSig = signature.eve_id.toUpperCase();
   result = result.replace(/\{sig\}/g, () => fullSig);
 
-  // Replace {dest_type}
+  // Replace {dest_type} — prefer the actual destination (an explicit class passed
+  // at link time, or the system the signature is linked to), and only fall back to
+  // the configured/derived destination type when the actual destination is unknown.
   let destTypeStr = '';
   if (destSystemClass) {
     destTypeStr = destSystemClass;
-  } else if (signature.type && MULTI_DEST_WHS.includes(signature.type) && info.destType) {
-    const destOption = ALL_DEST_TYPES_MAP[info.destType];
-    if (destOption) {
-      destTypeStr = destOption.label;
+  } else if (signature.linked_system) {
+    destTypeStr = getSystemClassGroup(signature.linked_system.system_class) ?? '';
+  }
+
+  if (!destTypeStr) {
+    if (signature.type && MULTI_DEST_WHS.includes(signature.type) && info.destType) {
+      const destOption = ALL_DEST_TYPES_MAP[info.destType];
+      if (destOption) {
+        destTypeStr = destOption.label;
+      }
+    } else if (signature.type === 'K162' && info.k162Type) {
+      const k162Option = ALL_DEST_TYPES_MAP[info.k162Type];
+      if (k162Option) {
+        destTypeStr = k162Option.label;
+      }
+    } else if (signature.type && wormholesData[signature.type]) {
+      const whData = wormholesData[signature.type];
+      const whClass = whData?.dest?.length === 1 ? WORMHOLES_ADDITIONAL_INFO[whData.dest[0]] : null;
+      if (whClass) {
+        destTypeStr = whClass.shortName || whClass.shortTitle;
+      }
+    } else if (info.destType) {
+      const destOption = ALL_DEST_TYPES_MAP[info.destType];
+      destTypeStr = destOption ? destOption.label : info.destType;
     }
-  } else if (signature.type === 'K162' && info.k162Type) {
-    const k162Option = ALL_DEST_TYPES_MAP[info.k162Type];
-    if (k162Option) {
-      destTypeStr = k162Option.label;
-    }
-  } else if (signature.type && wormholesData[signature.type]) {
-    const whData = wormholesData[signature.type];
-    const whClass = whData?.dest?.length === 1 ? WORMHOLES_ADDITIONAL_INFO[whData.dest[0]] : null;
-    if (whClass) {
-      destTypeStr = whClass.shortName || whClass.shortTitle;
-    }
-  } else if (info.destType) {
-    const destOption = ALL_DEST_TYPES_MAP[info.destType];
-    destTypeStr = destOption ? destOption.label : info.destType;
   }
   const finalDestTypeStr = formatDestString(destTypeStr, mapping);
   result = result.replace(/\{dest_type\}/g, () => (finalDestTypeStr !== '?' ? finalDestTypeStr : ''));
+
+  // Replace {dest_name} — the actual linked destination system name (empty if unlinked).
+  const destName = signature.linked_system?.solar_system_name ?? '';
+  result = result.replace(/\{dest_name\}/g, () => destName);
 
   // Calculate {dest_class_index}
   let destClassIndexStr = '';

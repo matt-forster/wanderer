@@ -133,3 +133,46 @@ describe('handleAutoBookmark copyResult', () => {
     expect(copyResult).toBeUndefined();
   });
 });
+
+describe('getBookmarkNameForSignature destination templating', () => {
+  const sigs: Record<string, SystemSignature[]> = {};
+
+  const linkedSig = (systemClass: number, name: string, extra: Partial<SystemSignature> = {}) =>
+    ({
+      id: '1',
+      eve_id: 'abc-123',
+      group: SignatureGroup.Wormhole,
+      type: 'K162',
+      linked_system: { system_class: systemClass, solar_system_name: name },
+      ...extra,
+    }) as unknown as SystemSignature;
+
+  it('populates {dest_type} from the actual linked destination class', () => {
+    const sig = linkedSig(3, 'J123456');
+    expect(
+      getBookmarkNameForSignature(sig, { bookmark_name_format: '{dest_type}' }, sigs, 'sys-uuid', '30000142'),
+    ).toBe('C3');
+  });
+
+  it('prefers the actual linked destination over a configured dest type', () => {
+    const sig = linkedSig(7, 'Jita', { custom_info: JSON.stringify({ destType: 'pochven' }) });
+    expect(
+      getBookmarkNameForSignature(sig, { bookmark_name_format: '{dest_type}' }, sigs, 'sys-uuid', '30000142'),
+    ).toBe('HS');
+  });
+
+  it('exposes the destination system name via {dest_name}', () => {
+    const sig = linkedSig(3, 'J123456');
+    expect(
+      getBookmarkNameForSignature(sig, { bookmark_name_format: '{dest_name}' }, sigs, 'sys-uuid', '30000142'),
+    ).toBe('J123456');
+  });
+
+  it('leaves {dest_name} empty when the signature is not linked', () => {
+    const sig = { id: '1', eve_id: 'abc-123', group: SignatureGroup.Wormhole } as unknown as SystemSignature;
+    // empty dest_name -> whole format resolves empty -> falls back to eve_id
+    expect(
+      getBookmarkNameForSignature(sig, { bookmark_name_format: '{dest_name}' }, sigs, 'sys-uuid', '30000142'),
+    ).toBe('abc-123');
+  });
+});
