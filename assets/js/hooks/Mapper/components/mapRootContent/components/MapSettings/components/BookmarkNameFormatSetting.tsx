@@ -4,7 +4,7 @@ import { InputText } from 'primereact/inputtext';
 import { WdButton } from '@/hooks/Mapper/components/ui-kit';
 import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { formatBookmarkName } from '@/hooks/Mapper/helpers/bookmarkFormatHelper';
-import { SignatureGroup, SignatureKind, SystemSignature } from '@/hooks/Mapper/types';
+import { SignatureGroup, SignatureKind, SolarSystemStaticInfoRaw, SystemSignature } from '@/hooks/Mapper/types';
 import { MassState, TimeStatus } from '@/hooks/Mapper/types/connection';
 
 const DUMMY_SIG_BASE: SystemSignature = {
@@ -26,6 +26,7 @@ const VARIABLES = [
   { id: '{sig_letters}', desc: 'First 3 chars of signature (e.g., ABC)' },
   { id: '{sig}', desc: 'Full signature ID (e.g., ABC-123)' },
   { id: '{dest_type}', desc: 'Destination class (e.g., C5, HS, Thera)' },
+  { id: '{dest_name}', desc: 'Destination system name when linked (e.g., J123456, Jita)' },
   {
     id: '{dest_class_index}',
     desc: 'Letter index for multiple holes to same class (empty if only 1, otherwise a, b, c...)',
@@ -60,31 +61,37 @@ const CustomMappingInput = ({
 }: CustomMappingInputProps) => {
   const value = localMapping[mappingKey] !== undefined ? localMapping[mappingKey] : defaultVal;
 
-  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setLocalMapping(prev => {
-      const newMapping = { ...prev };
-      newMapping[mappingKey] = e.target.value;
-      return newMapping;
-    });
-  }, [mappingKey, setLocalMapping]);
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setLocalMapping(prev => {
+        const newMapping = { ...prev };
+        newMapping[mappingKey] = e.target.value;
+        return newMapping;
+      });
+    },
+    [mappingKey, setLocalMapping],
+  );
 
-  const handleBlur = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    
-    const newMapping = { ...localMapping };
-    if (val === defaultVal) {
-      delete newMapping[mappingKey];
-    } else {
-      newMapping[mappingKey] = val;
-    }
+  const handleBlur = useCallback(
+    (e: React.FocusEvent<HTMLInputElement>) => {
+      const val = e.target.value;
 
-    setLocalMapping(newMapping);
+      const newMapping = { ...localMapping };
+      if (val === defaultVal) {
+        delete newMapping[mappingKey];
+      } else {
+        newMapping[mappingKey] = val;
+      }
 
-    const savedVal = savedMapping[mappingKey] !== undefined ? savedMapping[mappingKey] : defaultVal;
-    if (val !== savedVal) {
-      updateSetting(UserSettingsRemoteProps.bookmark_custom_mapping, newMapping);
-    }
-  }, [mappingKey, defaultVal, savedMapping, localMapping, setLocalMapping, updateSetting]);
+      setLocalMapping(newMapping);
+
+      const savedVal = savedMapping[mappingKey] !== undefined ? savedMapping[mappingKey] : defaultVal;
+      if (val !== savedVal) {
+        updateSetting(UserSettingsRemoteProps.bookmark_custom_mapping, newMapping);
+      }
+    },
+    [mappingKey, defaultVal, savedMapping, localMapping, setLocalMapping, updateSetting],
+  );
 
   return (
     <div className="flex flex-col gap-1 w-[120px]">
@@ -173,6 +180,8 @@ export const BookmarkNameFormatSetting = () => {
     const dummySig: SystemSignature = {
       ...DUMMY_SIG_BASE,
       type: 'V283',
+      // Linked to a real system so {dest_name} renders a sample in the preview.
+      linked_system: { solar_system_name: 'Jita', system_class: 7 } as unknown as SolarSystemStaticInfoRaw,
       custom_info: JSON.stringify({
         time_status: TimeStatus._1h,
         mass_status: MassState.verge,
@@ -219,25 +228,28 @@ export const BookmarkNameFormatSetting = () => {
     }
   }, [localFormat, formatStr, updateSetting]);
 
-  const insertVariable = useCallback((variable: string) => {
-    const input = inputRef.current;
-    if (input) {
-      const start = input.selectionStart || 0;
-      const end = input.selectionEnd || 0;
-      const newFormat = localFormat.substring(0, start) + variable + localFormat.substring(end);
-      setLocalFormat(newFormat);
-      updateSetting(UserSettingsRemoteProps.bookmark_name_format, newFormat);
+  const insertVariable = useCallback(
+    (variable: string) => {
+      const input = inputRef.current;
+      if (input) {
+        const start = input.selectionStart || 0;
+        const end = input.selectionEnd || 0;
+        const newFormat = localFormat.substring(0, start) + variable + localFormat.substring(end);
+        setLocalFormat(newFormat);
+        updateSetting(UserSettingsRemoteProps.bookmark_name_format, newFormat);
 
-      setTimeout(() => {
-        input.focus();
-        input.setSelectionRange(start + variable.length, start + variable.length);
-      }, 0);
-    } else {
-      const newFormat = localFormat + variable;
-      setLocalFormat(newFormat);
-      updateSetting(UserSettingsRemoteProps.bookmark_name_format, newFormat);
-    }
-  }, [localFormat, updateSetting]);
+        setTimeout(() => {
+          input.focus();
+          input.setSelectionRange(start + variable.length, start + variable.length);
+        }, 0);
+      } else {
+        const newFormat = localFormat + variable;
+        setLocalFormat(newFormat);
+        updateSetting(UserSettingsRemoteProps.bookmark_name_format, newFormat);
+      }
+    },
+    [localFormat, updateSetting],
+  );
 
   const resetToDefault = useCallback(() => {
     const defaultFormat = '{chain_index} {sig_letters} {dest_type} {size} {mass_status} {time_status}';
